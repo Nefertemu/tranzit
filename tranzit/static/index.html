@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Tranzit</title>
+<style>
+:root{--bg:#f4f5f7;--card:#fff;--ink:#16181d;--mut:#6b7280;--line:#e3e5ea;--acc:#2f6bff;--acc-ink:#fff;--ok:#16a34a;--bad:#dc2626;--warn:#d97706;--soft:#eef1f6}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#181b22;--ink:#e8eaee;--mut:#8b93a1;--line:#272b35;--acc:#5b8cff;--acc-ink:#0b0d12;--ok:#34d399;--bad:#f87171;--warn:#fbbf24;--soft:#1f232c}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+main{max-width:1040px;margin:0 auto;padding:16px}
+header{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;margin-bottom:16px}
+header h1{font-size:20px;margin:0;letter-spacing:-.01em}
+header .meta{color:var(--mut);font-size:13px;flex:1;min-width:200px}
+h2{font-size:16px;margin:0}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;margin-bottom:16px;overflow:hidden}
+.card>.head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--line)}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 12px;text-align:left;white-space:nowrap;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+th{font-size:12px;font-weight:600;color:var(--mut);text-transform:uppercase;letter-spacing:.04em}
+td.wrap{white-space:normal;min-width:140px}
+.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:13px}
+.mut{color:var(--mut)} .small{font-size:13px}
+.empty{padding:28px 16px;text-align:center;color:var(--mut)}
+button{font:inherit;color:var(--ink);background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer}
+button:hover{border-color:var(--mut)}
+button.pri{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);font-weight:600}
+button.danger{color:var(--bad)}
+button.link{background:none;border:0;padding:4px 6px;color:var(--acc)}
+button:disabled{opacity:.5;cursor:default}
+input,select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--acc);outline-offset:1px}
+label{display:block;font-size:13px;color:var(--mut);margin:12px 0 4px}
+.row{display:flex;gap:12px}.row>*{flex:1;min-width:0}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:var(--mut);margin-right:8px}
+.dot.ok{background:var(--ok)}.dot.bad{background:var(--bad)}
+.sw{appearance:none;width:36px;height:20px;border-radius:10px;background:var(--line);position:relative;cursor:pointer;padding:0;border:0;vertical-align:middle}
+.sw::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s}
+.sw:checked{background:var(--ok)}.sw:checked::after{left:18px}
+.alert{padding:10px 14px;border-radius:10px;margin-bottom:12px;border:1px solid}
+.alert.err{border-color:var(--bad);color:var(--bad)}.alert.warn{border-color:var(--warn);color:var(--warn)}
+dialog{border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);padding:20px;width:min(480px,calc(100vw - 24px));max-height:calc(100vh - 24px)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog h3{margin:0 0 4px;font-size:17px}
+.btns{display:flex;justify-content:flex-end;gap:8px;margin-top:18px;flex-wrap:wrap}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.presets button{text-align:left;padding:10px 12px}
+.presets button.on{border-color:var(--acc);box-shadow:inset 0 0 0 1px var(--acc)}
+.presets small{display:block;color:var(--mut)}
+.err-text{color:var(--bad);font-size:13px;margin-top:10px;min-height:1em}
+.hint{background:var(--soft);border-radius:8px;padding:10px 12px;margin-top:12px;font-size:13px}
+fieldset{border:0;border-top:1px solid var(--line);margin:18px 0 0;padding:14px 0 0}
+legend{font-weight:600;padding:0 8px 0 0}
+#login{max-width:340px;margin:16vh auto 0;padding:24px}
+#toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;display:none;max-width:90vw;z-index:9}
+svg.spark{vertical-align:middle}
+@media (max-width:640px){.hide-s{display:none}.row{flex-direction:column;gap:0}}
+</style>
+</head>
+<body>
+<div id="login" class="card" hidden>
+  <h1 style="margin:0 0 4px;font-size:22px">Tranzit</h1>
+  <div class="mut small">Вход в панель</div>
+  <form id="loginForm">
+    <label for="pw">Пароль</label>
+    <input id="pw" type="password" autocomplete="current-password" required autofocus>
+    <div class="err-text" id="loginErr"></div>
+    <button class="pri" style="width:100%;margin-top:8px">Войти</button>
+  </form>
+</div>
+
+<main id="app" hidden>
+  <header>
+    <h1>Tranzit</h1>
+    <div class="meta" id="meta"></div>
+    <button id="btnSettings">Настройки</button>
+    <button id="btnLogout">Выйти</button>
+  </header>
+  <div id="problems"></div>
+
+  <section class="card">
+    <div class="head"><h2>Правила</h2><button class="pri" id="btnAdd">Добавить правило</button></div>
+    <div class="scroll" id="rules"></div>
+  </section>
+
+  <section class="card">
+    <div class="head"><h2>Серверы выхода</h2><span class="mut small">появляются сами, когда на них ведёт правило</span></div>
+    <div class="scroll" id="servers"></div>
+  </section>
+</main>
+
+<dialog id="dlgRule">
+  <form method="dialog" id="ruleForm">
+    <h3 id="ruleTitle">Новое правило</h3>
+    <div class="mut small">Трафик, пришедший на порт этого сервера, уйдёт на сервер выхода.</div>
+    <div class="presets" id="presets">
+      <button type="button" data-kind="wg" data-proto="udp" data-port="51820">WireGuard / AmneziaWG<small>UDP</small></button>
+      <button type="button" data-kind="vless" data-proto="tcp" data-port="443">VLESS / Xray<small>TCP</small></button>
+      <button type="button" data-kind="mtproto" data-proto="tcp" data-port="443">MTProto<small>TCP, прокси Telegram</small></button>
+      <button type="button" data-kind="custom" data-proto="tcp" data-port="">Своё правило<small>любой порт и протокол</small></button>
+    </div>
+    <label for="rDip">Адрес сервера выхода (IPv4)</label>
+    <input id="rDip" list="knownIps" placeholder="203.0.113.10" inputmode="decimal" required>
+    <datalist id="knownIps"></datalist>
+    <div class="row">
+      <div><label for="rLport">Порт на этом сервере</label><input id="rLport" placeholder="51820" required></div>
+      <div><label for="rDport">Порт на сервере выхода</label><input id="rDport" placeholder="тот же"></div>
+      <div id="protoBox"><label for="rProto">Протокол</label>
+        <select id="rProto"><option value="tcp">TCP</option><option value="udp">UDP</option><option value="both">TCP и UDP</option></select></div>
+    </div>
+    <label for="rName">Название (необязательно)</label>
+    <input id="rName" maxlength="60" placeholder="Например: Нидерланды, телефон">
+    <div class="err-text" id="ruleErr"></div>
+    <div class="btns"><button type="button" data-close>Отмена</button><button class="pri" id="ruleSave">Создать</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgServer">
+  <form method="dialog" id="serverForm">
+    <h3>Сервер <span class="mono" id="sIp"></span></h3>
+    <label for="sName">Название</label><input id="sName" maxlength="60" placeholder="Например: Нидерланды">
+    <label for="sNote">Заметка</label><input id="sNote" maxlength="200" placeholder="Хостер, срок оплаты — что угодно">
+    <label for="sTh">Тревога, если задержка выше, мс (0 — не следить за задержкой)</label>
+    <input id="sTh" type="number" min="0" max="10000" value="0">
+    <label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px"><input type="checkbox" class="sw" id="sMon"> Проверять доступность</label>
+    <div class="err-text" id="serverErr"></div>
+    <div class="btns"><button type="button" class="danger" id="sDelete" style="margin-right:auto">Удалить</button>
+      <button type="button" data-close>Отмена</button><button class="pri">Сохранить</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgSettings">
+  <h3>Настройки</h3>
+  <form id="setForm">
+    <fieldset style="border-top:0;margin-top:6px;padding-top:0"><legend>Telegram</legend>
+      <div class="mut small">Бот пишет, когда сервер выхода перестал отвечать или ожил. Команды: /status, /rules, /ping.</div>
+      <label for="tgToken">Токен бота от @BotFather</label><input id="tgToken" autocomplete="off" placeholder="123456:ABC…">
+      <label for="tgChat">Ваш Chat ID</label><input id="tgChat" placeholder="Сохраните токен и напишите боту /start — он подскажет">
+    </fieldset>
+    <fieldset><legend>Проверка серверов</legend>
+      <div class="row">
+        <div><label for="monInt">Как часто, секунд</label><input id="monInt" type="number" min="10" max="3600"></div>
+        <div><label for="monFails">Неудач подряд до тревоги</label><input id="monFails" type="number" min="1" max="20"></div>
+      </div>
+      <label style="display:flex;gap:10px;align-items:center;color:var(--ink);font-size:15px;margin-top:14px"><input type="checkbox" class="sw" id="bbr"> Ускорение TCP (BBR)</label>
+    </fieldset>
+    <div class="err-text" id="setErr"></div>
+    <div class="btns"><button type="button" id="tgOff" class="danger" style="margin-right:auto">Отключить бота</button>
+      <button type="button" id="tgTest">Проверить Telegram</button><button class="pri">Сохранить</button></div>
+  </form>
+  <form id="pwForm">
+    <fieldset><legend>Пароль панели</legend>
+      <input type="text" autocomplete="username" value="tranzit" hidden>
+      <div class="row">
+        <div><label for="pwOld">Текущий</label><input id="pwOld" type="password" autocomplete="current-password" required></div>
+        <div><label for="pwNew">Новый, от 10 символов</label><input id="pwNew" type="password" autocomplete="new-password" minlength="10" required></div>
+      </div>
+      <div class="err-text" id="pwErr"></div>
+      <div class="btns" style="margin-top:6px"><button>Сменить пароль</button></div>
+    </fieldset>
+  </form>
+  <fieldset><legend>Резервная копия</legend>
+    <div class="mut small">Правила, серверы и настройки одним файлом. В файле лежит токен бота — храните его у себя.</div>
+    <div class="btns" style="justify-content:flex-start;margin-top:10px"><button id="bkSave">Скачать копию</button><button id="bkLoad">Восстановить из файла</button>
+      <input type="file" id="bkFile" accept="application/json,.json" hidden></div>
+  </fieldset>
+  <div class="btns"><button data-close>Закрыть</button></div>
+</dialog>
+
+<div id="toast" role="status"></div>
+
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let S = null, editRule = null, editServer = null, preset = null, timer = null;
+
+async function api(method, path, body) {
+  const r = await fetch("api/" + path, {method, credentials: "same-origin",
+    headers: {"Content-Type": "application/json", "X-Requested-With": "tranzit"},
+    body: body === undefined ? undefined : JSON.stringify(body)});
+  let data = {};
+  try { data = await r.json(); } catch (e) {}
+  if (r.status === 401 && path !== "login") { showLogin(); throw new Error("Нужен вход"); }
+  if (!r.ok) throw new Error(data.error || "Сервер ответил ошибкой " + r.status);
+  return data;
+}
+function toast(text) {
+  const t = $("toast"); t.textContent = text; t.style.display = "block";
+  clearTimeout(toast.t); toast.t = setTimeout(() => t.style.display = "none", 4500);
+}
+function bytes(n) {
+  const u = ["Б", "КБ", "МБ", "ГБ", "ТБ"]; let i = 0;
+  while (n >= 1024 && i < u.length - 1) { n /= 1024; i++; }
+  return (i ? n.toFixed(1) : n) + " " + u[i];
+}
+function dur(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600);
+  return d ? d + " д " + h + " ч" : h + " ч " + Math.floor(s % 3600 / 60) + " мин";
+}
+function spark(h) {
+  const v = h.filter(x => x !== null); if (h.length < 2 || !v.length) return "";
+  const max = Math.max(...v, 1), w = 120, hgt = 24, step = w / (h.length - 1);
+  let d = "", pen = false, fails = "";
+  h.forEach((x, i) => {
+    if (x === null) { pen = false; fails += `<rect x="${(i * step - 1).toFixed(1)}" y="0" width="2" height="${hgt}" fill="var(--bad)" opacity=".5"/>`; return; }
+    d += (pen ? "L" : "M") + (i * step).toFixed(1) + " " + (hgt - 2 - x / max * (hgt - 4)).toFixed(1); pen = true;
+  });
+  return `<svg class="spark" width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}" aria-hidden="true">${fails}<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="1.5"/></svg>`;
+}
+const srvName = ip => { const s = S.servers.find(x => x.ip === ip); return s && s.name ? s.name : ""; };
+
+function render() {
+  const y = S.system;
+  $("meta").textContent = [y.host, y.ip, "нагрузка " + y.load, y.uptime ? "работает " + dur(y.uptime) : "", "v" + y.version, y.dry ? "ДЕМО-РЕЖИМ: правила не применяются" : ""].filter(Boolean).join(" · ");
+  $("problems").innerHTML = y.problems.map(p => `<div class="alert ${p.level}">${esc(p.text)}</div>`).join("");
+
+  $("rules").innerHTML = S.rules.length ? `<table><thead><tr><th></th><th>Название</th><th>Вход</th><th>Куда</th><th class="hide-s">Отправлено</th><th class="hide-s">Получено</th><th></th></tr></thead><tbody>` +
+    S.rules.map(r => `<tr>
+      <td><input type="checkbox" class="sw" data-toggle="${r.id}" ${r.enabled ? "checked" : ""} aria-label="Включено"></td>
+      <td class="wrap">${esc(r.name) || '<span class="mut">без названия</span>'}</td>
+      <td class="mono">${esc(y.ip)}:${esc(r.lport)} <span class="mut">${r.proto === "both" ? "tcp+udp" : r.proto}</span></td>
+      <td class="mono">${srvName(r.dip) ? esc(srvName(r.dip)) + " · " : ""}${esc(r.dip)}:${esc(r.dport || r.lport)}</td>
+      <td class="hide-s">${bytes(r.up)}</td><td class="hide-s">${bytes(r.down)}</td>
+      <td><button class="link" data-edit="${r.id}">Изменить</button><button class="link danger" data-del="${r.id}">Удалить</button></td></tr>`).join("") + "</tbody></table>"
+    : `<div class="empty">Правил пока нет. Нажмите «Добавить правило» — понадобится адрес вашего зарубежного сервера и порт.</div>`;
+
+  $("servers").innerHTML = S.servers.length ? `<table><thead><tr><th>Сервер</th><th>Адрес</th><th>Задержка</th><th class="hide-s">История</th><th></th></tr></thead><tbody>` +
+    S.servers.map(s => {
+      const state = !s.monitor ? ["", "не проверяется"] : !s.seen ? ["", "ждём первую проверку"] : s.ms === null ? ["bad", "не отвечает"] : ["ok", s.ms + " мс"];
+      return `<tr><td class="wrap"><span class="dot ${state[0]}"></span>${esc(s.name) || '<span class="mut">без названия</span>'}
+        ${s.note ? `<div class="mut small">${esc(s.note)}</div>` : ""}</td>
+      <td><span class="mono">${esc(s.ip)}</span>${s.geo ? `<div class="mut small">${esc(s.geo)}</div>` : ""}</td>
+      <td>${state[1]}</td><td class="hide-s">${spark(s.hist)}</td>
+      <td><button class="link" data-ping="${s.id}">Проверить</button>${s.geo ? "" : `<button class="link" data-geo="${s.id}" title="Спросит страну и провайдера у справочника ipwho.is">Где он?</button>`}<button class="link" data-srv="${s.id}">Изменить</button></td></tr>`;
+    }).join("") + "</tbody></table>"
+    : `<div class="empty">Серверов пока нет.</div>`;
+  $("knownIps").innerHTML = S.servers.map(s => `<option value="${esc(s.ip)}">${esc(s.name)}</option>`).join("");
+}
+
+async function refresh() {
+  try { S = await api("GET", "state"); $("login").hidden = true; $("app").hidden = false; render(); } catch (e) {}
+}
+function showLogin() { clearInterval(timer); timer = null; $("app").hidden = true; $("login").hidden = false; document.querySelectorAll("dialog[open]").forEach(d => d.close()); $("pw").focus(); }
+function start() { refresh(); if (!timer) timer = setInterval(() => { if (!document.hidden) refresh(); }, 5000); }
+
+$("loginForm").onsubmit = async e => {
+  e.preventDefault(); $("loginErr").textContent = "";
+  try { await api("POST", "login", {password: $("pw").value}); $("pw").value = ""; start(); }
+  catch (err) { $("loginErr").textContent = err.message; }
+};
+$("btnLogout").onclick = async () => { try { await api("POST", "logout", {}); } catch (e) {} showLogin(); };
+document.addEventListener("click", e => { if (e.target.matches("[data-close]")) e.target.closest("dialog").close(); });
+
+// ── правила ──
+function pickPreset(kind) {
+  preset = kind;
+  document.querySelectorAll("#presets button").forEach(b => b.classList.toggle("on", b.dataset.kind === kind));
+  $("protoBox").hidden = kind !== "custom";
+}
+$("presets").onclick = e => {
+  const b = e.target.closest("button"); if (!b) return;
+  pickPreset(b.dataset.kind); $("rProto").value = b.dataset.proto;
+  if (!editRule) { $("rLport").value = b.dataset.port; }
+};
+function openRule(r) {
+  editRule = r || null; $("ruleErr").textContent = "";
+  $("ruleTitle").textContent = r ? "Изменить правило" : "Новое правило"; $("ruleSave").textContent = r ? "Сохранить" : "Создать";
+  $("rDip").value = r ? r.dip : ""; $("rLport").value = r ? r.lport : "51820"; $("rDport").value = r ? r.dport : "";
+  $("rName").value = r ? r.name : ""; $("rProto").value = r ? r.proto : "udp"; pickPreset(r ? r.kind : "wg");
+  $("dlgRule").showModal();
+}
+$("btnAdd").onclick = () => openRule();
+$("ruleForm").onsubmit = async e => {
+  e.preventDefault(); $("ruleErr").textContent = "";
+  const body = {kind: preset, proto: $("rProto").value, dip: $("rDip").value, lport: $("rLport").value, dport: $("rDport").value, name: $("rName").value};
+  try {
+    const r = editRule ? await api("PUT", "rules/" + editRule.id, body) : await api("POST", "rules", body);
+    $("dlgRule").close(); await refresh();
+    toast(editRule ? "Правило сохранено" : `Готово. В приложении-клиенте укажите адрес ${S.system.ip}, порт ${r.lport}`);
+  } catch (err) { $("ruleErr").textContent = err.message; }
+};
+$("rules").onclick = async e => {
+  const t = e.target;
+  try {
+    if (t.dataset.toggle) { await api("PUT", "rules/" + t.dataset.toggle, {enabled: t.checked}); await refresh(); }
+    else if (t.dataset.edit) openRule(S.rules.find(r => r.id === t.dataset.edit));
+    else if (t.dataset.del) {
+      const r = S.rules.find(x => x.id === t.dataset.del);
+      if (confirm(`Удалить правило «${r.name || r.lport}»? Подключения через порт ${r.lport} перестанут работать.`)) { await api("DELETE", "rules/" + r.id); await refresh(); }
+    }
+  } catch (err) { toast(err.message); refresh(); }
+};
+
+// ── серверы ──
+$("servers").onclick = async e => {
+  const t = e.target;
+  try {
+    if (t.dataset.ping) { t.disabled = true; const r = await api("POST", `servers/${t.dataset.ping}/ping`, {}); toast(r.ms === null ? "Сервер не ответил" : "Задержка " + r.ms + " мс"); await refresh(); }
+    else if (t.dataset.geo) { t.disabled = true; await api("POST", `servers/${t.dataset.geo}/geo`, {}); await refresh(); }
+    else if (t.dataset.srv) {
+      const s = editServer = S.servers.find(x => x.id === t.dataset.srv);
+      $("sIp").textContent = s.ip; $("sName").value = s.name; $("sNote").value = s.note; $("sTh").value = s.threshold; $("sMon").checked = s.monitor;
+      $("serverErr").textContent = ""; $("sDelete").hidden = s.used > 0; $("dlgServer").showModal();
+    }
+  } catch (err) { toast(err.message); refresh(); }
+};
+$("serverForm").onsubmit = async e => {
+  e.preventDefault();
+  try { await api("PUT", "servers/" + editServer.id, {name: $("sName").value, note: $("sNote").value, threshold: $("sTh").value, monitor: $("sMon").checked}); $("dlgServer").close(); refresh(); }
+  catch (err) { $("serverErr").textContent = err.message; }
+};
+$("sDelete").onclick = async () => {
+  try { await api("DELETE", "servers/" + editServer.id); $("dlgServer").close(); refresh(); } catch (err) { $("serverErr").textContent = err.message; }
+};
+
+// ── настройки ──
+$("btnSettings").onclick = () => {
+  const s = S.settings;
+  $("tgToken").value = ""; $("tgToken").placeholder = s.tg_token_set ? "сохранён — оставьте пустым, чтобы не менять" : "123456:ABC…";
+  $("tgChat").value = s.tg_chat; $("monInt").value = s.mon_interval; $("monFails").value = s.mon_fails; $("bbr").checked = s.bbr;
+  $("tgOff").hidden = !s.tg_token_set; $("setErr").textContent = $("pwErr").textContent = ""; $("pwOld").value = $("pwNew").value = "";
+  $("dlgSettings").showModal();
+};
+async function saveSettings() {
+  const body = {tg_chat: $("tgChat").value, mon_interval: $("monInt").value, mon_fails: $("monFails").value, bbr: $("bbr").checked};
+  if ($("tgToken").value.trim()) body.tg_token = $("tgToken").value;
+  await api("PUT", "settings", body); $("tgToken").value = ""; await refresh(); $("tgOff").hidden = !S.settings.tg_token_set;
+}
+$("setForm").onsubmit = async e => {
+  e.preventDefault(); $("setErr").textContent = "";
+  try { await saveSettings(); toast("Настройки сохранены"); } catch (err) { $("setErr").textContent = err.message; }
+};
+$("tgTest").onclick = async () => {
+  $("setErr").textContent = "";
+  try { await saveSettings(); await api("POST", "telegram-test", {}); toast("Сообщение отправлено — проверьте Telegram"); } catch (err) { $("setErr").textContent = err.message; }
+};
+$("tgOff").onclick = async () => {
+  if (!confirm("Отключить бота? Токен будет удалён из панели, тревоги перестанут приходить.")) return;
+  try { await api("PUT", "settings", {tg_token: ""}); await refresh(); $("tgOff").hidden = true; $("tgToken").placeholder = "123456:ABC…"; toast("Бот отключён"); } catch (err) { $("setErr").textContent = err.message; }
+};
+$("pwForm").onsubmit = async e => {
+  e.preventDefault(); $("pwErr").textContent = "";
+  try { await api("POST", "password", {old: $("pwOld").value, new: $("pwNew").value}); toast("Пароль изменён. Войдите с новым."); showLogin(); }
+  catch (err) { $("pwErr").textContent = err.message; }
+};
+$("bkSave").onclick = async () => {
+  try {
+    const data = await api("GET", "backup");
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], {type: "application/json"}));
+    a.download = "tranzit-" + new Date().toISOString().slice(0, 10) + ".json"; a.click(); URL.revokeObjectURL(a.href);
+  } catch (err) { toast(err.message); }
+};
+$("bkLoad").onclick = () => $("bkFile").click();
+$("bkFile").onchange = async e => {
+  const f = e.target.files[0]; e.target.value = ""; if (!f) return;
+  try {
+    const data = JSON.parse(await f.text());
+    if (!confirm(`Заменить текущие правила (${S.rules.length}) правилами из файла (${(data.rules || []).length})? Нынешние будут стёрты.`)) return;
+    const r = await api("POST", "restore", data); await refresh(); toast("Восстановлено правил: " + r.rules);
+  } catch (err) { toast(err instanceof SyntaxError ? "Файл не читается — это не резервная копия Tranzit" : err.message); }
+};
+
+start();
+</script>
+</body>
+</html>
