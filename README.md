@@ -12,13 +12,6 @@
 bash <(curl -fsSL https://raw.githubusercontent.com/Nefertemu/tranzit/main/install.sh)
 ```
 
-Если репозиторий закрытый — с ключом GitHub, которому разрешено читать этот репозиторий:
-
-```bash
-export GH_TOKEN=<ключ>
-bash <(curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/Nefertemu/tranzit/main/install.sh)
-```
-
 Установщик напечатает адрес панели и пароль. Пароль показывается один раз.
 Сертификат панели самоподписанный — браузер один раз предупредит, это ожидаемо.
 

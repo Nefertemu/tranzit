@@ -1,12 +1,7 @@
 #!/usr/bin/env bash
 # Tranzit — установка и обновление одной командой.
 #
-#   Открытый репозиторий:
-#     bash <(curl -fsSL https://raw.githubusercontent.com/Nefertemu/tranzit/main/install.sh)
-#
-#   Закрытый репозиторий (ключ GitHub с правом читать этот репозиторий):
-#     export GH_TOKEN=<ключ>
-#     bash <(curl -fsSL -H "Authorization: token $GH_TOKEN" https://raw.githubusercontent.com/Nefertemu/tranzit/main/install.sh)
+#   bash <(curl -fsSL https://raw.githubusercontent.com/Nefertemu/tranzit/main/install.sh)
 #
 # Повторный запуск обновляет программу; правила, пароль и настройки остаются.
 set -euo pipefail
@@ -55,8 +50,8 @@ main() {
     if [ -n "$token" ]; then
         printf 'header = "Authorization: token %s"\n' "$token" | curl -fsSL -K - -o "$work/src.tgz" "$url"
     else
-        curl -fsSL -o "$work/src.tgz" "$url"
-    fi || { echo "Не скачалось с GitHub. Если репозиторий закрытый — задайте ключ: export GH_TOKEN=<ключ>" >&2; exit 1; }
+        curl -fsSL -o "$work/src.tgz" "https://github.com/$repo/archive/refs/heads/$ref.tar.gz"
+    fi || { echo "Не скачалось с GitHub. Проверьте, что сервер видит github.com, и повторите." >&2; exit 1; }
     mkdir "$work/src"
     tar -xzf "$work/src.tgz" -C "$work/src" --strip-components=1
     [ -f "$work/src/tranzit/cli.py" ] || { echo "В скачанном архиве нет программы — проверьте имя репозитория и ветку." >&2; exit 1; }
@@ -71,9 +66,6 @@ main() {
 
     install -d -m 700 "$etc"
     printf 'REPO=%s\nREF=%s\n' "$repo" "$ref" > "$etc/install.conf"
-    if [ -n "$token" ]; then
-        ( umask 077; printf '%s' "$token" > "$etc/gh_token" )
-    fi
 
     cat > /usr/local/bin/tranzit <<'EOF'
 #!/bin/sh
