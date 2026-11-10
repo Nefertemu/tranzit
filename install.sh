@@ -31,13 +31,14 @@ main() {
     command -v curl >/dev/null || need+=(curl)
     command -v tar >/dev/null || need+=(tar)
     command -v ss >/dev/null || need+=(iproute2)
+    command -v ssh >/dev/null || need+=(openssh-client)
     if [ "${#need[@]}" -gt 0 ]; then
         echo "$say ставлю пакеты: ${need[*]}"
         if command -v apt-get >/dev/null; then
             DEBIAN_FRONTEND=noninteractive apt-get update -qq
             DEBIAN_FRONTEND=noninteractive apt-get install -y -qq "${need[@]}" ca-certificates >/dev/null
         elif command -v dnf >/dev/null; then
-            dnf install -y -q "${need[@]/iputils-ping/iputils}" >/dev/null
+            dnf install -y -q $(printf '%s\n' "${need[@]}" | sed 's/^iputils-ping$/iputils/; s/^openssh-client$/openssh-clients/') >/dev/null
         else
             echo "Не знаю менеджер пакетов этой системы. Поставьте вручную: ${need[*]}" >&2; exit 1
         fi
@@ -92,8 +93,6 @@ WorkingDirectory=/opt/tranzit
 ExecStart=/usr/bin/env python3 -m tranzit serve
 Restart=always
 RestartSec=3
-NoNewPrivileges=true
-ProtectHome=true
 PrivateTmp=true
 
 [Install]

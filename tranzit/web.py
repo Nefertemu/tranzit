@@ -9,7 +9,7 @@ import ssl
 import threading
 import time
 
-from . import VERSION, engine, monitor, netutil, store
+from . import VERSION, engine, monitor, netutil, nodes, store
 
 STATIC = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 PLAIN = os.environ.get("TRANZIT_HTTP") == "1"  # только для разработки
@@ -44,7 +44,9 @@ def api_state(_body):
     if now - _doctor["at"] > 20:
         _doctor["data"], _doctor["at"] = engine.doctor(s), now
     rules = [dict(r, **tr.get(r["id"], {"up": 0, "down": 0})) for r in s["rules"]]
-    servers = [dict(sv, used=sum(1 for r in s["rules"] if r["dip"] == sv["ip"]), **monitor.view(sv["ip"]))
+    # ключи протоколов наружу не отдаём — только названия; сами ключи — по кнопке
+    servers = [dict(sv, used=sum(1 for r in s["rules"] if r["dip"] == sv["ip"]),
+                    protocols=sorted(sv.get("protocols", {})), **monitor.view(sv["ip"]))
                for sv in s["servers"]]
     settings = dict(s["settings"])
     settings["tg_token_set"] = bool(settings.pop("tg_token"))
@@ -53,6 +55,8 @@ def api_state(_body):
     except (OSError, ValueError):
         uptime = 0
     return {"rules": rules, "servers": servers, "settings": settings,
+            "local": sorted((s.get("local") or {}).get("protocols", {})),
+            "catalog": {k: {"title": v[0], "proto": v[1], "port": v[2]} for k, v in nodes.PROTOCOLS.items()},
             "system": {"host": socket.gethostname(), "ip": netutil.local_ip(), "version": VERSION,
                        "load": round(os.getloadavg()[0], 2), "uptime": int(uptime),
                        "problems": _doctor["data"], "dry": store.DRY}}
@@ -129,6 +133,28 @@ def server_ping(_body, sid):
     return {"ms": monitor.probe(sv["ip"], [p for p in ports if "-" not in p])}
 
 
+def node_install(body):
+    return nodes.start(body)
+
+
+def job_view(_body, jid):
+    job = nodes.jobs.get(jid)
+    if not job:
+        raise ApiError(404, "Эта установка уже забыта — панель перезапускалась. Обновите страницу.")
+    if job["status"] != "run":
+        _changed()
+    return {"status": job["status"], "log": job["log"], "target": job["target"]}
+
+
+def server_keys(_body, sid):
+    s = store.load()
+    return {"keys": nodes.keys(s, _find(s["servers"], sid, "Сервер"))}
+
+
+def local_keys(_body):
+    return {"keys": nodes.keys(store.load())}
+
+
 def settings_update(body):
     with store.edit() as s:
         old_bbr = s["settings"].get("bbr")
@@ -159,14 +185,15 @@ def password_change(body):
 
 def backup(_body):
     s = store.load()
-    return {"tranzit_backup": 1, "rules": s["rules"], "servers": s["servers"], "settings": s["settings"]}
+    return {"tranzit_backup": 1, "rules": s["rules"], "servers": s["servers"], "settings": s["settings"],
+            "local": s.get("local") or {}}
 
 
 def restore(body):
     if body.get("tranzit_backup") != 1 or not isinstance(body.get("rules"), list):
         raise store.Invalid("Это не файл резервной копии Tranzit")
     with store.edit() as s:
-        fresh = {"rules": [], "servers": [], "settings": s["settings"]}
+        fresh = {"rules": [], "servers": [], "settings": s["settings"], "local": s.get("local") or {}}
         for raw in body["rules"]:
             r = store.validate_rule(fresh, raw)
             r["id"] = store.new_id(fresh["rules"])
@@ -178,6 +205,10 @@ def restore(body):
                 sv = store.ensure_server(fresh, store.check_ip(raw["ip"]))
                 store.validate_server(raw, sv)
                 sv["geo"] = str(raw.get("geo") or "")[:120]
+                if isinstance(raw.get("protocols"), dict):
+                    sv["protocols"] = {k: v for k, v in raw["protocols"].items()
+                                       if k in nodes.PROTOCOLS and isinstance(v, dict) and isinstance(v.get("port"), int)}
+                    sv["ssh_port"] = raw.get("ssh_port") if isinstance(raw.get("ssh_port"), int) else 22
         if isinstance(body.get("settings"), dict):
             fresh["settings"] = store.validate_settings(body["settings"], s["settings"])
         engine.apply(fresh)
@@ -196,6 +227,10 @@ ROUTES = [
     ("DELETE", r"servers/([0-9a-f]{6})", server_delete),
     ("POST", r"servers/([0-9a-f]{6})/geo", server_geo),
     ("POST", r"servers/([0-9a-f]{6})/ping", server_ping),
+    ("POST", r"nodes", node_install),
+    ("GET", r"jobs/([0-9a-f]{6})", job_view),
+    ("GET", r"servers/([0-9a-f]{6})/keys", server_keys),
+    ("GET", r"local/keys", local_keys),
     ("PUT", r"settings", settings_update),
     ("POST", r"telegram-test", telegram_test),
     ("POST", r"password", password_change),

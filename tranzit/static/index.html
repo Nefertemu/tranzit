@@ -58,6 +58,13 @@ legend{font-weight:600;padding:0 8px 0 0}
 #login{max-width:340px;margin:16vh auto 0;padding:24px}
 #toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:10px;display:none;max-width:90vw;z-index:9}
 svg.spark{vertical-align:middle}
+.tag{display:inline-block;font-size:12px;padding:1px 7px;border-radius:6px;background:var(--soft);border:1px solid var(--line);margin:2px 4px 0 0}
+.prow{display:flex;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.prow:last-child{border-bottom:0}.prow .nm{flex:1;min-width:150px;color:var(--ink);font-size:15px;margin:0;display:flex;gap:10px;align-items:center}
+.prow input[type=text]{width:86px}.prow .host{width:170px}.prow small{color:var(--mut)}
+pre.log{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;margin:12px 0 0;height:300px;overflow:auto;white-space:pre-wrap;word-break:break-word;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace}
+textarea{font:12px/1.4 ui-monospace,Menlo,Consolas,monospace;color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px;width:100%;resize:vertical}
+dialog.wide{width:min(620px,calc(100vw - 24px))}
 @media (max-width:640px){.hide-s{display:none}.row{flex-direction:column;gap:0}}
 </style>
 </head>
@@ -88,7 +95,7 @@ svg.spark{vertical-align:middle}
   </section>
 
   <section class="card">
-    <div class="head"><h2>Серверы выхода</h2><span class="mut small">появляются сами, когда на них ведёт правило</span></div>
+    <div class="head"><h2>Серверы выхода</h2><button class="pri" id="btnNode">Добавить ноду</button></div>
     <div class="scroll" id="servers"></div>
   </section>
 </main>
@@ -131,6 +138,43 @@ svg.spark{vertical-align:middle}
     <div class="btns"><button type="button" class="danger" id="sDelete" style="margin-right:auto">Удалить</button>
       <button type="button" data-close>Отмена</button><button class="pri">Сохранить</button></div>
   </form>
+</dialog>
+
+<dialog id="dlgNode" class="wide">
+  <form method="dialog" id="nodeForm">
+    <h3>Добавить ноду</h3>
+    <div class="mut small">Панель зайдёт на сервер, поставит выбранные протоколы и сама создаст пробросы. Пароль нужен один раз: панель оставит на сервере свой ключ, а пароль не сохранит.</div>
+    <label for="nTarget">Куда ставить</label>
+    <select id="nTarget"><option value="remote">На сервер выхода (нода)</option><option value="local">На этот сервер, без каскада</option></select>
+    <div id="nRemote">
+      <div class="row">
+        <div style="flex:2"><label for="nIp">Адрес ноды (IPv4)</label><input id="nIp" placeholder="203.0.113.10" inputmode="decimal"></div>
+        <div><label for="nPort">Порт SSH</label><input id="nPort" value="22" inputmode="numeric"></div>
+      </div>
+      <div class="row">
+        <div><label for="nPass">Пароль root</label><input id="nPass" type="password" autocomplete="off" placeholder="не нужен, если нода уже добавлена"></div>
+        <div><label for="nName">Название</label><input id="nName" maxlength="60" placeholder="Например: Нидерланды"></div>
+      </div>
+    </div>
+    <label>Протоколы</label>
+    <div id="nProtos"></div>
+    <div class="err-text" id="nodeErr"></div>
+    <div class="btns"><button type="button" data-close>Отмена</button><button class="pri">Установить</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlgJob" class="wide">
+  <h3 id="jobTitle">Установка</h3>
+  <div class="mut small" id="jobState"></div>
+  <pre class="log" id="jobLog"></pre>
+  <div class="btns"><button data-close id="jobClose">Свернуть</button><button class="pri" id="jobKeys" hidden>Показать ключи</button></div>
+</dialog>
+
+<dialog id="dlgKeys" class="wide">
+  <h3 id="keysTitle">Ключи</h3>
+  <div class="mut small">Ссылку вставьте в приложение (v2rayNG, Hiddify, Streisand, Telegram). Текст настроек сохраните файлом .conf и откройте в WireGuard или AmneziaWG.</div>
+  <div id="keysBody"></div>
+  <div class="btns"><button data-close>Закрыть</button></div>
 </dialog>
 
 <dialog id="dlgSettings">
@@ -177,7 +221,7 @@ svg.spark{vertical-align:middle}
 "use strict";
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-let S = null, editRule = null, editServer = null, preset = null, timer = null;
+let S = null, editRule = null, editServer = null, preset = null, timer = null, job = null, jobFor = null;
 
 async function api(method, path, body) {
   const r = await fetch("api/" + path, {method, credentials: "same-origin",
@@ -212,6 +256,7 @@ function spark(h) {
   });
   return `<svg class="spark" width="${w}" height="${hgt}" viewBox="0 0 ${w} ${hgt}" aria-hidden="true">${fails}<path d="${d}" fill="none" stroke="var(--acc)" stroke-width="1.5"/></svg>`;
 }
+const tags = list => list.map(k => `<span class="tag">${esc(S.catalog[k] ? S.catalog[k].title : k)}</span>`).join("");
 const srvName = ip => { const s = S.servers.find(x => x.ip === ip); return s && s.name ? s.name : ""; };
 
 function render() {
@@ -229,16 +274,19 @@ function render() {
       <td><button class="link" data-edit="${r.id}">Изменить</button><button class="link danger" data-del="${r.id}">Удалить</button></td></tr>`).join("") + "</tbody></table>"
     : `<div class="empty">Правил пока нет. Нажмите «Добавить правило» — понадобится адрес вашего зарубежного сервера и порт.</div>`;
 
-  $("servers").innerHTML = S.servers.length ? `<table><thead><tr><th>Сервер</th><th>Адрес</th><th>Задержка</th><th class="hide-s">История</th><th></th></tr></thead><tbody>` +
+  const localRow = S.local.length ? `<tr><td class="wrap"><span class="dot ok"></span>Этот сервер<div class="mut small">протоколы без каскада</div></td>
+      <td><span class="mono">${esc(y.ip)}</span><div>${tags(S.local)}</div></td><td></td><td class="hide-s"></td>
+      <td><button class="link" data-keys="local">Ключи</button></td></tr>` : "";
+  $("servers").innerHTML = S.servers.length || localRow ? `<table><thead><tr><th>Сервер</th><th>Адрес</th><th>Задержка</th><th class="hide-s">История</th><th></th></tr></thead><tbody>` + localRow +
     S.servers.map(s => {
       const state = !s.monitor ? ["", "не проверяется"] : !s.seen ? ["", "ждём первую проверку"] : s.ms === null ? ["bad", "не отвечает"] : ["ok", s.ms + " мс"];
       return `<tr><td class="wrap"><span class="dot ${state[0]}"></span>${esc(s.name) || '<span class="mut">без названия</span>'}
         ${s.note ? `<div class="mut small">${esc(s.note)}</div>` : ""}</td>
-      <td><span class="mono">${esc(s.ip)}</span>${s.geo ? `<div class="mut small">${esc(s.geo)}</div>` : ""}</td>
+      <td><span class="mono">${esc(s.ip)}</span>${s.geo ? `<div class="mut small">${esc(s.geo)}</div>` : ""}<div>${tags(s.protocols)}</div></td>
       <td>${state[1]}</td><td class="hide-s">${spark(s.hist)}</td>
-      <td><button class="link" data-ping="${s.id}">Проверить</button>${s.geo ? "" : `<button class="link" data-geo="${s.id}" title="Спросит страну и провайдера у справочника ipwho.is">Где он?</button>`}<button class="link" data-srv="${s.id}">Изменить</button></td></tr>`;
+      <td>${s.protocols.length ? `<button class="link" data-keys="${s.id}">Ключи</button>` : ""}<button class="link" data-node="${s.id}">Протоколы</button><button class="link" data-ping="${s.id}">Проверить</button>${s.geo ? "" : `<button class="link" data-geo="${s.id}" title="Спросит страну и провайдера у справочника ipwho.is">Где он?</button>`}<button class="link" data-srv="${s.id}">Изменить</button></td></tr>`;
     }).join("") + "</tbody></table>"
-    : `<div class="empty">Серверов пока нет.</div>`;
+    : `<div class="empty">Серверов пока нет. «Добавить ноду» — панель сама поставит на ваш зарубежный сервер нужные протоколы.</div>`;
   $("knownIps").innerHTML = S.servers.map(s => `<option value="${esc(s.ip)}">${esc(s.name)}</option>`).join("");
 }
 
@@ -302,6 +350,8 @@ $("servers").onclick = async e => {
   try {
     if (t.dataset.ping) { t.disabled = true; const r = await api("POST", `servers/${t.dataset.ping}/ping`, {}); toast(r.ms === null ? "Сервер не ответил" : "Задержка " + r.ms + " мс"); await refresh(); }
     else if (t.dataset.geo) { t.disabled = true; await api("POST", `servers/${t.dataset.geo}/geo`, {}); await refresh(); }
+    else if (t.dataset.keys) showKeys(t.dataset.keys);
+    else if (t.dataset.node) openNode(S.servers.find(x => x.id === t.dataset.node));
     else if (t.dataset.srv) {
       const s = editServer = S.servers.find(x => x.id === t.dataset.srv);
       $("sIp").textContent = s.ip; $("sName").value = s.name; $("sNote").value = s.note; $("sTh").value = s.threshold; $("sMon").checked = s.monitor;
@@ -316,6 +366,78 @@ $("serverForm").onsubmit = async e => {
 };
 $("sDelete").onclick = async () => {
   try { await api("DELETE", "servers/" + editServer.id); $("dlgServer").close(); refresh(); } catch (err) { $("serverErr").textContent = err.message; }
+};
+
+// ── ноды и протоколы ──
+function openNode(sv) {
+  $("nodeErr").textContent = ""; $("nTarget").value = "remote"; $("nRemote").hidden = false;
+  $("nIp").value = sv ? sv.ip : ""; $("nPort").value = sv && sv.ssh_port ? sv.ssh_port : 22; $("nPass").value = ""; $("nName").value = sv ? sv.name : "";
+  const have = sv ? sv.protocols : [];
+  $("nProtos").innerHTML = Object.entries(S.catalog).map(([k, c]) => `<div class="prow">
+    <label class="nm"><input type="checkbox" class="sw" data-p="${k}" ${have.includes(k) ? "checked disabled" : ""}> ${esc(c.title)}${have.includes(k) ? " <small>уже стоит</small>" : ""}</label>
+    <small>порт ${c.proto.toUpperCase()}</small><input type="text" data-port="${k}" value="${c.port}" inputmode="numeric" aria-label="Порт ${esc(c.title)}">
+    ${k === "wg" || k === "awg" ? `<small>устройств</small><input type="text" data-clients="${k}" value="3" inputmode="numeric" aria-label="Число устройств">` : ""}
+    ${k === "vless" ? `<small>маскировка под</small><input type="text" class="host" data-host="${k}" value="www.microsoft.com" aria-label="Сайт для маскировки">` : ""}
+    ${k === "mtproto" ? `<small>маскировка под</small><input type="text" class="host" data-host="${k}" value="www.google.com" aria-label="Сайт для маскировки">` : ""}
+    ${k === "awg" ? `<small style="flex-basis:100%">Только на Ubuntu. Собирает модуль ядра — несколько минут.</small>` : ""}</div>`).join("");
+  $("dlgNode").showModal();
+}
+$("btnNode").onclick = () => openNode();
+$("nTarget").onchange = () => {
+  const local = $("nTarget").value === "local"; $("nRemote").hidden = local;
+  document.querySelectorAll("#nProtos [data-p]").forEach(c => { const have = local && S.local.includes(c.dataset.p); c.disabled = have; if (local) c.checked = have; });
+};
+$("nodeForm").onsubmit = async e => {
+  e.preventDefault(); $("nodeErr").textContent = "";
+  const protocols = {};
+  document.querySelectorAll("#nProtos [data-p]").forEach(c => {
+    if (!c.checked || c.disabled) return; const k = c.dataset.p, q = a => document.querySelector(`#nProtos [data-${a}="${k}"]`);
+    protocols[k] = {port: q("port").value}; if (q("clients")) protocols[k].clients = q("clients").value; if (q("host")) protocols[k].host = q("host").value;
+  });
+  const local = $("nTarget").value === "local";
+  try {
+    const r = await api("POST", "nodes", {target: local ? "local" : "remote", ip: $("nIp").value, ssh_port: $("nPort").value, password: $("nPass").value, name: $("nName").value, protocols});
+    $("nPass").value = ""; $("dlgNode").close(); job = r.job; jobFor = local ? "local" : $("nIp").value.trim();
+    $("jobLog").textContent = ""; $("jobKeys").hidden = true; $("jobTitle").textContent = "Установка: " + (local ? "этот сервер" : jobFor);
+    $("jobState").textContent = "Идёт установка. Окно можно свернуть — работа продолжится."; $("dlgJob").showModal(); pollJob();
+  } catch (err) { $("nodeErr").textContent = err.message; }
+};
+async function pollJob() {
+  if (!job) return;
+  try {
+    const j = await api("GET", "jobs/" + job), log = $("jobLog");
+    log.textContent = j.log.join("\n"); log.scrollTop = log.scrollHeight;
+    if (j.status === "run") return void setTimeout(pollJob, 1500);
+    job = null; await refresh();
+    $("jobState").textContent = j.status === "ok" ? "Установка завершена." : "Установка не удалась — причина в последних строках.";
+    $("jobKeys").hidden = j.status !== "ok"; $("jobClose").textContent = "Закрыть";
+    if (!$("dlgJob").open) toast(j.status === "ok" ? "Установка на " + j.target + " завершена" : "Установка на " + j.target + " не удалась");
+  } catch (err) { $("jobState").textContent = err.message; job = null; }
+}
+$("jobKeys").onclick = () => {
+  $("dlgJob").close(); const sv = S.servers.find(x => x.ip === jobFor); showKeys(jobFor === "local" ? "local" : sv && sv.id);
+};
+async function showKeys(id) {
+  if (!id) return;
+  try {
+    const r = await api("GET", id === "local" ? "local/keys" : `servers/${id}/keys`), sv = S.servers.find(x => x.id === id);
+    $("keysTitle").textContent = "Ключи: " + (id === "local" ? "этот сервер" : sv.name || sv.ip);
+    $("keysBody").innerHTML = r.keys.map((k, i) => k.kind === "note" ? `<label>${esc(k.title)}</label><div class="alert warn">${esc(k.text)}</div>` :
+      `<label for="key${i}">${esc(k.title)}</label><textarea id="key${i}" rows="${k.kind === "conf" ? 8 : 3}" readonly>${esc(k.text)}</textarea>
+       <div class="btns" style="margin-top:6px"><button data-copy="key${i}">Скопировать</button>${k.kind === "conf" ? `<button data-save="key${i}" data-name="${esc(k.title)}">Скачать .conf</button>` : ""}</div>`).join("") || `<div class="empty">Ключей нет.</div>`;
+    $("dlgKeys").showModal();
+  } catch (err) { toast(err.message); }
+}
+$("keysBody").onclick = async e => {
+  const t = e.target;
+  if (t.dataset.copy) {
+    const el = $(t.dataset.copy);
+    try { await navigator.clipboard.writeText(el.value); } catch (err) { el.select(); document.execCommand("copy"); }
+    toast("Скопировано");
+  } else if (t.dataset.save) {
+    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([$(t.dataset.save).value], {type: "text/plain"}));
+    a.download = "tranzit-" + t.dataset.save + ".conf"; a.click(); URL.revokeObjectURL(a.href);
+  }
 };
 
 // ── настройки ──

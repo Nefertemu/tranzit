@@ -94,7 +94,8 @@ def cmd_passwd(args):
         if getpass.getpass("Ещё раз: ") != password:
             sys.exit("Пароли не совпали. Пароль не изменён.")
     store.set_password(password)
-    subprocess.run(["systemctl", "try-restart", "tranzit"], capture_output=True)
+    if shutil.which("systemctl"):
+        subprocess.run(["systemctl", "try-restart", "tranzit"], capture_output=True)
     print("Пароль изменён. Все открытые входы в панель закрыты.")
 
 
